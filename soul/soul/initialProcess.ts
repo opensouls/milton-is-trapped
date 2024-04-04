@@ -1,31 +1,30 @@
 import {
   ChatMessageRoleEnum,
-  CortexStep,
-  brainstorm,
-  decision,
-  externalDialog,
-  instruction,
-  internalMonologue,
-} from "socialagi";
-import {
   MentalProcess,
+  Perception,
   useActions,
   usePerceptions,
   useProcessManager,
   useProcessMemory,
   useSoulMemory,
-} from "soul-engine";
-import { Perception } from "soul-engine/soul";
+} from "@opensouls/engine";
+import brainstorm from "./lib/brainstorm.js";
+import decision from "./lib/decision.js";
+import externalDialog from "./lib/externalDialog.js";
+import instruction from "./lib/instruction.js";
+import internalMonologue from "./lib/internalMonologue.js";
 import { prompt } from "./lib/prompt.js";
 
-const initialProcess: MentalProcess = async ({ step: initialStep }) => {
+const initialProcess: MentalProcess = async ({ workingMemory }) => {
   const { invokingPerception, pendingPerceptions } = usePerceptions();
   const { speak, log, dispatch } = useActions();
+
+  let memory = workingMemory;
 
   log("starting");
   if (pendingPerceptions.current.length > 0) {
     log("aborting because of pending perceptions");
-    return initialStep;
+    return memory;
   }
 
   const roomDescription = useSoulMemory(
@@ -44,7 +43,7 @@ const initialProcess: MentalProcess = async ({ step: initialStep }) => {
 
     log(content.slice(0, 30) + "... (" + content.length + " bytes)");
 
-    description = await describeImageWithVision(initialStep, content);
+    description = await describeImageWithVision(memory, content);
   } else {
     log("getting description from perception");
     description = (invokingPerception?._metadata?.description ?? invokingPerception?.content) as string;
@@ -53,7 +52,7 @@ const initialProcess: MentalProcess = async ({ step: initialStep }) => {
     throw new Error("No description found");
   }
 
-  let step = await initialStep.withUpdatedMemory(async (memories) => {
+  let step = await memory.withUpdatedMemory(async (memories) => {
     const newMemories = memories.flat();
     return newMemories.slice(0, newMemories.length - 1);
   });

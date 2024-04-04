@@ -15,8 +15,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@opensouls/engine": "^0.1.11",
-    "socialagi": "^0.1.10",
-    "soul-engine": "^0.1.11"
+    "@opensouls/engine": "^0.1.11"
   }
 }
