@@ -2,6 +2,8 @@ import {
   ChatMessageRoleEnum,
   MentalProcess,
   Perception,
+  WorkingMemory,
+  indentNicely,
   useActions,
   usePerceptions,
   useProcessManager,
@@ -13,7 +15,6 @@ import decision from "./lib/decision.js";
 import externalDialog from "./lib/externalDialog.js";
 import instruction from "./lib/instruction.js";
 import internalMonologue from "./lib/internalMonologue.js";
-import { prompt } from "./lib/prompt.js";
 
 const initialProcess: MentalProcess = async ({ workingMemory }) => {
   const { invokingPerception, pendingPerceptions } = usePerceptions();
@@ -52,10 +53,7 @@ const initialProcess: MentalProcess = async ({ workingMemory }) => {
     throw new Error("No description found");
   }
 
-  let step = await memory.withUpdatedMemory(async (memories) => {
-    const newMemories = memories.flat();
-    return newMemories.slice(0, newMemories.length - 1);
-  });
+  memory = memory.slice(0, memory.memories.length - 1);
 
   log("thinking about change");
   const memoriesForDiff = [
@@ -69,13 +67,19 @@ const initialProcess: MentalProcess = async ({ workingMemory }) => {
     },
   ];
 
-  let computeStep = await step.withUpdatedMemory(async (memories) => {
-    return memories.concat(memoriesForDiff);
-  });
-  log("computeStep: ", JSON.stringify(computeStep.memories.slice(-2)));
+  memory = memory
+    .withMemory({
+      role: ChatMessageRoleEnum.Assistant,
+      content: `Room before change: ${roomDescription.current}`,
+    })
+    .withMemory({
+      role: ChatMessageRoleEnum.Assistant,
+      content: `Room after change: ${description}`,
+    });
 
-  const thoughtAboutChange = await computeStep.compute(
-    brainstorm("Name the one thing that changed in the room. Don't reflect about it, just observe what changed."),
+  const [, thoughtAboutChange] = await brainstorm(
+    memory,
+    "Name the one thing that changed in the room. Don't reflect about it, just observe what changed.",
     {
       model: "quality",
     }
@@ -84,161 +88,163 @@ const initialProcess: MentalProcess = async ({ workingMemory }) => {
   roomDescription.current = description;
 
   log("noticed change: " + thoughtAboutChange);
-  step = step.withMemory([
-    {
-      role: ChatMessageRoleEnum.Assistant,
-      content: `Milton noticed: ${thoughtAboutChange}`,
-    },
-  ]);
+  memory = memory.withMemory({
+    role: ChatMessageRoleEnum.Assistant,
+    content: `Milton noticed: ${thoughtAboutChange}`,
+  });
 
   log("thinking about what happened");
-  step = await step.next(
-    internalMonologue("Milton thinks about his situation and about what just happened in the room"),
+  [memory] = await internalMonologue(
+    memory,
+    "Milton thinks about his situation and about what just happened in the room",
     {
       model: "quality",
     }
   );
 
   log("speaking");
-  step = await multiSpeak(step, pendingPerceptions.current);
+  memory = await multiSpeak(memory, pendingPerceptions.current);
 
   log("done");
-  return step;
+  return memory;
 };
 
-const multiSpeak = async (initialStep: CortexStep, pendingPerceptions: Perception[]) => {
+const multiSpeak = async (workingMemory: WorkingMemory, pendingPerceptions: Perception[]) => {
   const { speak, scheduleEvent, log } = useActions();
   const fragmentNo = useProcessMemory(0);
   const { wait } = useProcessManager();
 
-  let step = await initialStep.next(
-    externalDialog(
-      "Milton shares a thought fragment, hinting at a larger conversation to unfold. WITHOUT USING ELLIPSES."
-    ),
+  let memory = workingMemory;
+
+  let phrase;
+  [memory, phrase] = await externalDialog(
+    memory,
+    "Milton shares a thought fragment, hinting at a larger conversation to unfold. WITHOUT USING ELLIPSES.",
     { model: "quality" }
   );
   if (pendingPerceptions.length > 0) {
     log("aborting because of pending perceptions");
-    return initialStep;
+    return memory;
   }
-  speak(step.value);
+  speak(phrase);
 
-  let count = parseInt(
-    (await step.compute(
-      decision(
-        prompt`
-      How many additional conversational pieces will Milton want to express next?
-      Vary the number of pieces for a natural flow.
-      The last conversation involved ${fragmentNo.current} pieces.
-      Typically, expect 0. Occasionally, 1 or perhaps 2-5 pieces.
-    `,
-        ["5", "4", "3", "2", "1", "0"]
-      ),
-      { model: "quality" }
-    )) as string
-  ) as number;
+  const [, countString] = await decision(
+    memory,
+    {
+      description: indentNicely`
+        How many additional conversational pieces will Milton want to express next?
+        Vary the number of pieces for a natural flow.
+        The last conversation involved ${fragmentNo.current} pieces.
+        Typically, expect 0. Occasionally, 1 or perhaps 2-5 pieces.
+      `,
+      choices: ["5", "4", "3", "2", "1", "0"],
+    },
+    { model: "quality" }
+  );
+
+  let count = parseInt(countString, 10);
   fragmentNo.current = count;
 
   if (count === 0) {
-    return step;
+    return memory;
   }
 
   let waitTime = 1000;
   while (count > 1) {
     await wait(waitTime);
-    let length = await step.compute(
-      decision(
-        prompt`
-        How long should the next conversational piece be?
-      `,
-        ["very long", "long", "medium", "short"]
-      ),
+
+    let [, phraseLength] = await decision(
+      memory,
+      {
+        description: "How long should the next conversational piece be?",
+        choices: ["very long", "long", "medium", "short"],
+      },
       { model: "quality" }
     );
 
-    waitTime = length === "very long" ? 6000 : length === "long" ? 4000 : length === "medium" ? 2000 : 1000;
+    waitTime =
+      phraseLength === "very long" ? 6000 : phraseLength === "long" ? 4000 : phraseLength === "medium" ? 2000 : 1000;
     log(`waiting for ${waitTime}ms`);
 
-    const words = (length === "very long" ? 60 : length === "long" ? 40 : length === "medium" ? 20 : 10) + " words ";
+    const words =
+      (phraseLength === "very long" ? 60 : phraseLength === "long" ? 40 : phraseLength === "medium" ? 20 : 10) +
+      " words ";
 
     count -= 1;
-    const preStep = step;
-    step = await step.next(
-      externalDialog(prompt`
+    const previousMemory = memory;
+    [memory, phrase] = await externalDialog(
+      memory,
+      indentNicely`
         - Milton shares another thought fragment, building on the previous one. WITHOUT USING ELLIPSES.
         - Ensure this piece is ${words} in length
-        - Their last shared thought was: "${step.value}"
-      `),
+        - Their last shared thought was: "${phrase}"
+      `,
       { model: "quality" }
     );
+
     if (pendingPerceptions.length > 0) {
       log("aborting because of pending perceptions");
-      return preStep;
+      return previousMemory;
     }
-    speak(step.value);
+    speak(phrase);
   }
 
-  const text = await step.compute(
-    decision(
-      prompt`
-      Does Milton need to add another piece to conclude their last thought?
-    `,
-      ["yes", "no"]
-    ),
+  const [, text] = await decision(
+    memory,
+    {
+      description: `Does Milton need to add another piece to conclude their last thought?`,
+      choices: ["yes", "no"],
+    },
     { model: "quality" }
   );
   if (text === "yes") {
-    const preStep = step;
-    step = await step.next(
-      externalDialog(prompt`
-        - Milton needs to conclude their last thought fragment in this conversation
-      `),
+    const previousMemory = memory;
+    [, phrase] = await externalDialog(
+      memory,
+      `Milton needs to conclude their last thought fragment in this conversation`,
       { model: "quality" }
     );
     if (pendingPerceptions.length > 0) {
       log("aborting because of pending perceptions");
-      return preStep;
+      return previousMemory;
     }
-    speak(step.value);
+    speak(phrase);
   }
 
-  return step;
+  return memory;
 };
 
-async function describeImageWithVision(initialStep: CortexStep<any>, content: string) {
+async function describeImageWithVision(workingMemory: WorkingMemory, content: string) {
   const { log } = useActions();
 
-  // @ts-expect-error wip
-  const visionStep = await initialStep.withUpdatedMemory((existing) => {
-    return [
-      existing.flat()[0],
+  let memory = workingMemory;
+
+  memory = memory.withMemory(workingMemory.memories[0]).withMemory({
+    role: ChatMessageRoleEnum.User,
+    content: [
       {
-        role: ChatMessageRoleEnum.User,
-        content: [
-          {
-            type: "image_url",
-            image_url: {
-              url: content,
-            },
-          },
-        ],
+        type: "image_url",
+        image_url: {
+          url: content,
+        },
       },
-    ];
+    ],
   });
 
-  const visionResp = await visionStep.next(
-    instruction(prompt`
-    describe this pixel art image.
-    - don't say it's pixel art
-    - ignore the gray floor and the beige wall
-    - ignore shadows
-    - there's a human in the image, just say where he is, don't describe him. refer to him like this "the human is..."
-    - use bulleted list, one item per object 
-  `),
+  const [, value] = await instruction(
+    memory,
+    indentNicely`
+      describe this pixel art image.
+      - don't say it's pixel art
+      - ignore the gray floor and the beige wall
+      - ignore shadows
+      - there's a human in the image, just say where he is, don't describe him. refer to him like this "the human is..."
+      - use bulleted list, one item per object 
+    `,
     { model: "vision" }
   );
-  log(visionResp.value);
-  return visionResp.value;
+  log(value);
+  return value;
 }
 
 export default initialProcess;
