@@ -10,14 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@opensouls/engine": "^0.1.11",
     "dotting-temp-fix-dooart": "^2.1.8",
     "nes-ui-react": "^0.2.15",
     "phaser": "^3.80.0",
     "phaser-jsx": "^0.4.0",
     "pixi.js": "^7.4.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "soul-engine": "^0.0.45"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.56",

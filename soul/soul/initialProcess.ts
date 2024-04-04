@@ -38,39 +38,13 @@ const initialProcess: MentalProcess = async ({ step: initialStep }) => {
   if (invokingPerception?.action === "addObject") {
     log("getting description from vision");
     const content = invokingPerception?._metadata?.image?.toString();
-    log(content?.slice(0, 30) + "... (" + content?.length + " bytes)");
+    if (!content) {
+      throw new Error("No image found");
+    }
 
-    // @ts-expect-error wip
-    const visionStep = await initialStep.withUpdatedMemory((existing) => {
-      return [
-        existing.flat()[0],
-        {
-          role: ChatMessageRoleEnum.User,
-          content: [
-            {
-              type: "image_url",
-              image_url: {
-                url: content,
-              },
-            },
-          ],
-        },
-      ];
-    });
+    log(content.slice(0, 30) + "... (" + content.length + " bytes)");
 
-    const visionResp = await visionStep.next(
-      instruction(prompt`
-    describe this pixel art image.
-    - don't say it's pixel art
-    - ignore the gray floor and the beige wall
-    - ignore shadows
-    - there's a human in the image, just say where he is, don't describe him. refer to him like this "the human is..."
-    - use bulleted list, one item per object 
-  `),
-      { model: "vision" }
-    );
-    log(visionResp.value);
-    description = visionResp.value;
+    description = await describeImageWithVision(initialStep, content);
   } else {
     log("getting description from perception");
     description = (invokingPerception?._metadata?.description ?? invokingPerception?.content) as string;
@@ -231,5 +205,41 @@ const multiSpeak = async (initialStep: CortexStep, pendingPerceptions: Perceptio
 
   return step;
 };
+
+async function describeImageWithVision(initialStep: CortexStep<any>, content: string) {
+  const { log } = useActions();
+
+  // @ts-expect-error wip
+  const visionStep = await initialStep.withUpdatedMemory((existing) => {
+    return [
+      existing.flat()[0],
+      {
+        role: ChatMessageRoleEnum.User,
+        content: [
+          {
+            type: "image_url",
+            image_url: {
+              url: content,
+            },
+          },
+        ],
+      },
+    ];
+  });
+
+  const visionResp = await visionStep.next(
+    instruction(prompt`
+    describe this pixel art image.
+    - don't say it's pixel art
+    - ignore the gray floor and the beige wall
+    - ignore shadows
+    - there's a human in the image, just say where he is, don't describe him. refer to him like this "the human is..."
+    - use bulleted list, one item per object 
+  `),
+    { model: "vision" }
+  );
+  log(visionResp.value);
+  return visionResp.value;
+}
 
 export default initialProcess;

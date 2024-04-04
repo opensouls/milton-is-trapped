@@ -1,6 +1,6 @@
+import { Soul } from "@opensouls/engine";
 import { Text } from "nes-ui-react";
 import { useCallback, useEffect, useState } from "react";
-import { Soul } from "soul-engine/soul";
 import tokens from "./.tokens.json";
 import "./App.css";
 import PixelEditor from "./components/PixelEditor";
@@ -26,6 +26,7 @@ function App() {
         // local: true,
         token: tokens.soulEngineApiKey,
         debug: true,
+        local: tokens.soulLocal === "true",
       });
 
       await soul.connect();
