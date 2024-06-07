@@ -21,7 +21,6 @@ const Velocity = {
 export default class Player extends Phaser.Physics.Arcade.Sprite {
   // @ts-expect-error wip
   body!: Phaser.Physics.Arcade.Body;
-  cursors: Cursors;
   originalPosition: { x: number; y: number } = { x: 0, y: 0 };
   isReturning = false;
 
@@ -46,29 +45,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // Collide the sprite body with the world boundary
     this.setCollideWorldBounds(true);
 
-    // Set the camera to follow the game object
-    // scene.cameras.main.startFollow(this);
-
-    // print camera x and y
-    // console.log(scene.cameras.main.scrollX, scene.cameras.main.scrollY);
-    // 252 1141
-
-    // set camera x and y to 252 1141
-    // scene.cameras.main.scrollX = -48;
-    // scene.cameras.main.scrollY = 916;
-
-    // Add cursor keys
-    this.cursors = this.createCursorKeys();
-
     // Create sprite animations
     this.createAnimations();
-  }
-
-  /**
-   * Track the arrow keys & WASD.
-   */
-  private createCursorKeys() {
-    return this.scene.input.keyboard!.addKeys("w,a,s,d,up,left,down,right") as Cursors;
   }
 
   private createAnimations() {
@@ -201,7 +179,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   update() {
-    const { anims, body, cursors } = this;
+    const { anims, body } = this;
 
     if (this.isReturning) {
       const directionX = this.originalPosition.x - this.x;
@@ -215,75 +193,75 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // Stop any previous movement from the last frame
     body.setVelocity(0);
 
-    // Horizontal movement
-    switch (true) {
-      case cursors.left.isDown:
-      case cursors.a.isDown:
-        body.setVelocityX(-Velocity.Horizontal);
-        break;
+    // // Horizontal movement
+    // switch (true) {
+    //   case cursors.left.isDown:
+    //   case cursors.a.isDown:
+    //     body.setVelocityX(-Velocity.Horizontal);
+    //     break;
 
-      case cursors.right.isDown:
-      case cursors.d.isDown:
-        body.setVelocityX(Velocity.Horizontal);
-        break;
-    }
+    //   case cursors.right.isDown:
+    //   case cursors.d.isDown:
+    //     body.setVelocityX(Velocity.Horizontal);
+    //     break;
+    // }
 
-    // Vertical movement
-    switch (true) {
-      case cursors.up.isDown:
-      case cursors.w.isDown:
-        body.setVelocityY(-Velocity.Vertical);
-        break;
+    // // Vertical movement
+    // switch (true) {
+    //   case cursors.up.isDown:
+    //   case cursors.w.isDown:
+    //     body.setVelocityY(-Velocity.Vertical);
+    //     break;
 
-      case cursors.down.isDown:
-      case cursors.s.isDown:
-        body.setVelocityY(Velocity.Vertical);
-        break;
-    }
+    //   case cursors.down.isDown:
+    //   case cursors.s.isDown:
+    //     body.setVelocityY(Velocity.Vertical);
+    //     break;
+    // }
 
     // Normalize and scale the velocity so that player can't move faster along a diagonal
     body.velocity.normalize().scale(Velocity.Horizontal);
 
-    // Update the animation last and give left/right animations precedence over up/down animations
+    // // Update the animation last and give left/right animations precedence over up/down animations
+    // switch (true) {
+    //   case cursors.left.isDown:
+    //   case cursors.a.isDown:
+    //     anims.play(Animation.Left, true);
+    //     break;
+
+    //   case cursors.right.isDown:
+    //   case cursors.d.isDown:
+    //     anims.play(Animation.Right, true);
+    //     break;
+
+    //   case cursors.up.isDown:
+    //   case cursors.w.isDown:
+    //     anims.play(Animation.Up, true);
+    //     break;
+
+    //   case cursors.down.isDown:
+    //   case cursors.s.isDown:
+    //     anims.play(Animation.Down, true);
+    //     break;
+
+    //   default:
+    anims.stop();
+
+    // If we were moving, pick an idle frame to use
     switch (true) {
-      case cursors.left.isDown:
-      case cursors.a.isDown:
-        anims.play(Animation.Left, true);
+      case prevVelocity.x < 0:
+        this.setTexture(key.atlas.player, "player-walk-west.000");
         break;
-
-      case cursors.right.isDown:
-      case cursors.d.isDown:
-        anims.play(Animation.Right, true);
+      case prevVelocity.x > 0:
+        this.setTexture(key.atlas.player, "player-walk-east.000");
         break;
-
-      case cursors.up.isDown:
-      case cursors.w.isDown:
-        anims.play(Animation.Up, true);
+      case prevVelocity.y < 0:
+        this.setTexture(key.atlas.player, "player-walk-north.000");
         break;
-
-      case cursors.down.isDown:
-      case cursors.s.isDown:
-        anims.play(Animation.Down, true);
+      case prevVelocity.y > 0:
+        this.setTexture(key.atlas.player, "player-walk-south.000");
         break;
-
-      default:
-        anims.stop();
-
-        // If we were moving, pick an idle frame to use
-        switch (true) {
-          case prevVelocity.x < 0:
-            this.setTexture(key.atlas.player, "player-walk-west.000");
-            break;
-          case prevVelocity.x > 0:
-            this.setTexture(key.atlas.player, "player-walk-east.000");
-            break;
-          case prevVelocity.y < 0:
-            this.setTexture(key.atlas.player, "player-walk-north.000");
-            break;
-          case prevVelocity.y > 0:
-            this.setTexture(key.atlas.player, "player-walk-south.000");
-            break;
-        }
     }
+    // }
   }
 }

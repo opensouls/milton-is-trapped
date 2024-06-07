@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "dev": "bun run --hot src/index.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "@opensouls/engine": "^0.1.36",
+    "dotenv": "^16.4.5",
+    "hono": "^4.4.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

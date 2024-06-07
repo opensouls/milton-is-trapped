@@ -1,5 +1,0 @@
-{
-  "soulEngineOrganization": "add your org here",
-  "soulEngineApiKey": "paste here the output of: npx soul-engine apikey",
-  "soulEngineDebug": "false"
-}

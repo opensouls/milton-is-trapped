@@ -18,7 +18,7 @@ import internalMonologue from "./lib/internalMonologue.js";
 
 const initialProcess: MentalProcess = async ({ workingMemory }) => {
   const { invokingPerception, pendingPerceptions } = usePerceptions();
-  const { speak, log, dispatch } = useActions();
+  const { log } = useActions();
 
   let memory = workingMemory;
 
@@ -56,17 +56,6 @@ const initialProcess: MentalProcess = async ({ workingMemory }) => {
   memory = memory.slice(0, memory.memories.length - 1);
 
   log("thinking about change");
-  const memoriesForDiff = [
-    {
-      role: ChatMessageRoleEnum.Assistant,
-      content: `Room before change: ${roomDescription.current}`,
-    },
-    {
-      role: ChatMessageRoleEnum.Assistant,
-      content: `Room after change: ${description}`,
-    },
-  ];
-
   memory = memory
     .withMemory({
       role: ChatMessageRoleEnum.Assistant,
@@ -98,7 +87,7 @@ const initialProcess: MentalProcess = async ({ workingMemory }) => {
     memory,
     "Milton thinks about his situation and about what just happened in the room",
     {
-      model: "quality",
+      model: "gpt-4o",
     }
   );
 
@@ -149,10 +138,7 @@ const multiSpeak = async (workingMemory: WorkingMemory, pendingPerceptions: Perc
     return memory;
   }
 
-  let waitTime = 1000;
   while (count > 1) {
-    await wait(waitTime);
-
     let [, phraseLength] = await decision(
       memory,
       {
@@ -161,10 +147,6 @@ const multiSpeak = async (workingMemory: WorkingMemory, pendingPerceptions: Perc
       },
       { model: "quality" }
     );
-
-    waitTime =
-      phraseLength === "very long" ? 4000 : phraseLength === "long" ? 4000 : phraseLength === "medium" ? 2000 : 1000;
-    log(`waiting for ${waitTime}ms`);
 
     const words =
       (phraseLength === "very long" ? 30 : phraseLength === "long" ? 30 : phraseLength === "medium" ? 20 : 10) +
@@ -241,7 +223,7 @@ async function describeImageWithVision(workingMemory: WorkingMemory, content: st
       - there's a human in the image, just say where he is, don't describe him. refer to him like this "the human is..."
       - use bulleted list, one item per object 
     `,
-    { model: "vision" }
+    { model: "gpt-4o" }
   );
   log(value);
   return value;

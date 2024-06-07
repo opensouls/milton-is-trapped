@@ -70,45 +70,17 @@ export default class Main extends Phaser.Scene {
       this.selectedTile = null;
     });
 
-    this.events.on("toggle-talking", () => {
-      this.isTalking = !this.isTalking;
-      if (this.isTalking) {
-        this.mouth.setVisible(true);
-        this.animateMouth();
-      } else {
-        this.tweens.killTweensOf(this.mouth); // Stop the animation
-        this.mouth.setVisible(false);
-      }
+    this.events.on("toggle-talking-start", () => {
+      this.isTalking = true;
+      this.mouth.setVisible(true);
+      this.animateMouth();
     });
 
-    // this.events.on("player-says", (message: string) => {
-    //   if (this.lastMessage === message) {
-    //     return;
-    //   }
-
-    //   if (this.currentText) {
-    //     this.currentText.destroy();
-    //     this.currentText = null;
-    //   }
-
-    //   this.lastMessage = message;
-
-    //   const fontFamily = '"Press Start 2P", monospace';
-    //   const playerY = this.player.y;
-    //   const textX = 10;
-    //   const textY = playerY - 50;
-    //   this.currentText = this.add.text(textX, textY, message, {
-    //     fontFamily,
-    //     fontSize: "8px",
-    //     color: "#000",
-    //     padding: {
-    //       left: 10,
-    //       right: 10,
-    //       top: 10,
-    //       bottom: 10,
-    //     },
-    //   });
-    // });
+    this.events.on("toggle-talking-stop", () => {
+      this.isTalking = false;
+      this.tweens.killTweensOf(this.mouth);
+      this.mouth.setVisible(false);
+    });
 
     this.textures.on("addtexture", (textureKey: string) => {
       console.log(`Texture added with key: ${textureKey}, now creating sprite.`);
@@ -132,12 +104,13 @@ export default class Main extends Phaser.Scene {
 
   animateMouth() {
     let state = 0;
-    // const initialY = this.mouth.y;
+
     const createEvent = () => {
       this.time.addEvent({
         delay: Phaser.Math.Between(100, 400),
         callback: () => {
           if (!this.isTalking) {
+            this.mouth.setVisible(false);
             return;
           }
           state = (state + 1) % 3;
@@ -145,17 +118,17 @@ export default class Main extends Phaser.Scene {
             case 0:
               this.mouth.setVisible(true);
               this.mouth.setScale(1, 1);
-              // this.mouth.setY(initialY);
+
               break;
             case 1:
               this.mouth.setVisible(true);
               this.mouth.setScale(2, 1);
-              // this.mouth.setY(initialY);
+
               break;
             case 2:
               this.mouth.setVisible(true);
               this.mouth.setScale(2, 2);
-              // this.mouth.setY(initialY + 1);
+
               break;
           }
           createEvent();
@@ -176,8 +149,8 @@ export default class Main extends Phaser.Scene {
       for (let y = 0; y < 7; y++) {
         const tile = this.add
           .rectangle(
-            x * stepSize * CAMERA_ZOOM + (tileSize / 2) * CAMERA_ZOOM, // Center point x
-            y * stepSize * CAMERA_ZOOM + (tileSize / 2) * CAMERA_ZOOM, // Center point y
+            x * stepSize * CAMERA_ZOOM + (tileSize / 2) * CAMERA_ZOOM,
+            y * stepSize * CAMERA_ZOOM + (tileSize / 2) * CAMERA_ZOOM,
             tileSize * CAMERA_ZOOM,
             tileSize * CAMERA_ZOOM,
             0xffffff,
@@ -204,7 +177,7 @@ export default class Main extends Phaser.Scene {
 
           const onTileClick = this.game.registry.get("onTileClick");
           if (onTileClick) {
-            onTileClick(x, y); // Invoke the callback with the tile coordinates
+            onTileClick(x, y);
 
             this.selectedTile = tile;
             tile.setFillStyle(0xddddff, 0.4);
@@ -225,19 +198,13 @@ export default class Main extends Phaser.Scene {
   addBase64Image(base64: string, key: string) {
     console.log(`Attempting to add image with key: ${key}`);
 
-    // Create a new Image object
     const image = new Image();
     image.onload = () => {
       if (this.selectedTile) {
         this.player.jumpAwayFrom(this.selectedTile);
       }
 
-      console.log(`Image loaded, adding to textures with key: ${key}`);
-      // Add the image as a base64 texture
       this.textures.addImage(key, image);
-      // const x = this.selectedTile?.x || this.player.x;
-      // const y = this.selectedTile?.y || this.player.y;
-      // this.add.sprite(x, y, key);
 
       setTimeout(() => {
         const base64Image = this.exportCanvasAsBase64();
@@ -251,7 +218,7 @@ export default class Main extends Phaser.Scene {
     image.onerror = (error) => {
       console.error(`Error loading image with key: ${key}`, error);
     };
-    // Set the source of the image object to trigger the loading process
+
     image.src = base64;
   }
 
@@ -266,10 +233,8 @@ export default class Main extends Phaser.Scene {
   }
 
   exportCanvasAsBase64() {
-    // Assuming 'this' is a reference to your Phaser scene
     const canvas = this.game.canvas;
 
-    // Convert the canvas content to a base64 string (PNG format by default)
     const base64Image = canvas.toDataURL();
 
     return base64Image;
