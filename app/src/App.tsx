@@ -1,7 +1,6 @@
-import { Soul } from "@opensouls/engine";
 import { Text } from "nes-ui-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import tokens from "./.tokens.json";
+import { v4 as uuidv4 } from "uuid";
 import "./App.css";
 import PixelEditor from "./components/PixelEditor";
 import GameContainer from "./game/GameContainer";
@@ -9,9 +8,10 @@ import GameContainer from "./game/GameContainer";
 function App() {
   const [tileBeingEdited, setTileBeingEdited] = useState<{ x: number; y: number } | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
+  const [soul, setSoul] = useState<WebSocket | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
-
-  const [soul, setSoul] = useState<Soul | null>(null);
+  const audioQueue = useRef<HTMLAudioElement[]>([]);
+  const isPlaying = useRef<boolean>(false);
 
   useEffect(() => {
     if (soul) {
@@ -19,58 +19,96 @@ function App() {
     }
 
     const connectSoul = async () => {
-      const soul = new Soul({
-        organization: tokens.soulEngineOrganization,
-        blueprint: "milton",
-        soulId: "dev-001",
-        token: tokens.soulEngineApiKey,
-        debug: tokens.soulEngineDebug === "true",
-      });
+      const uuid = uuidv4();
+      const websocketServer = import.meta.env.VITE_WEBSOCKET_SERVER ?? "ws://localhost:3000";
+      const websocketUrl = `${websocketServer}/ws?client_id=${uuid}`;
+      const socket = new WebSocket(websocketUrl);
 
-      await soul.connect();
+      socket.onopen = () => {
+        console.log("Connected to soul, id:" + uuid);
+      };
 
-      soul.on("says", async (event) => {
-        const content = await event.content();
+      socket.onmessage = async (event) => {
+        const content = JSON.parse(event.data);
 
-        setMessages((messages) => {
-          if (!messages) {
-            return [content];
-          }
+        if (content.text) {
+          setMessages((messages) => {
+            if (!messages) {
+              return [content.text];
+            }
 
-          const newMessages = [...messages, content];
-          return newMessages.filter((message, index) => newMessages.indexOf(message) === index);
-        });
+            const newMessages = [...messages, content.text];
+            return newMessages.filter((message, index) => newMessages.indexOf(message) === index);
+          });
 
-        setTimeout(() => {
-          if (messagesRef.current) {
-            messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-          }
-        }, 100);
-      });
+          setTimeout(() => {
+            if (messagesRef.current) {
+              messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+            }
+          }, 100);
+        }
 
-      setSoul(soul);
+        if (content.audio) {
+          const audioUrl = content.audio;
+          const audio = new Audio(`${import.meta.env.VITE_HTTP_SERVER}/audio?url=${encodeURIComponent(audioUrl)}`);
+
+          audio.oncanplaythrough = () => {
+            audioQueue.current.push(audio);
+            if (!isPlaying.current) {
+              playNextAudio();
+            }
+          };
+
+          audio.load();
+        }
+      };
+
+      setSoul(socket);
 
       return () => {
-        soul.disconnect();
+        console.log("Closing soul connection, id:" + uuid);
+        socket.close();
       };
     };
 
     connectSoul();
   }, [soul]);
 
-  useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.key === "z") {
-        emitGameEvent("toggle-talking", null);
+  const playNextAudio = () => {
+    if (audioQueue.current.length > 0) {
+      isPlaying.current = true;
+
+      const audio = audioQueue.current.shift();
+      if (audio === undefined) {
+        console.error("Audio is undefined");
+        return;
       }
-    };
 
-    window.addEventListener("keyup", handleKeyPress);
+      audio.onplaying = () => {
+        emitGameEvent("toggle-talking-start", null);
+      };
 
-    return () => {
-      window.removeEventListener("keyup", handleKeyPress);
-    };
-  }, []);
+      audio.onended = () => {
+        emitGameEvent("toggle-talking-stop", null);
+        isPlaying.current = false;
+        playNextAudio();
+      };
+
+      audio.onerror = (e) => {
+        emitGameEvent("toggle-talking-stop", null);
+        console.error("Error loading audio file:", e);
+        isPlaying.current = false;
+        playNextAudio();
+      };
+
+      audio.play().catch((error) => {
+        emitGameEvent("toggle-talking-stop", null);
+        console.error("Error playing audio file:", error);
+        isPlaying.current = false;
+        playNextAudio();
+      });
+    }
+  };
 
   const handleTileClick = useCallback((x: number, y: number) => {
     console.log("Tile clicked", x, y);
@@ -88,15 +126,17 @@ function App() {
 
   const handleCanvasUpdate = useCallback(
     async (base64: string) => {
-      // setMessages([]);
-
-      soul?.dispatch({
-        action: "addObject",
-        content: `(image - ${base64.length} bytes)`,
-        _metadata: {
-          image: base64,
-        },
-      });
+      if (soul) {
+        soul.send(
+          JSON.stringify({
+            action: "addObject",
+            content: `(image - ${base64.length} bytes)`,
+            _metadata: {
+              image: base64,
+            },
+          })
+        );
+      }
     },
     [soul]
   );
@@ -121,7 +161,6 @@ function App() {
           ))}
         </div>
       </div>
-      {/* <Text size="large">{message}</Text> */}
     </>
   );
 }
@@ -148,7 +187,7 @@ function emitGameEvent(event: string, data: unknown) {
   const game = window.game as Phaser.Game;
 
   if (game.scene.scenes.length > 1) {
-    const mainScene = game.scene.scenes[1]; // Adjust based on your scene structure
+    const mainScene = game.scene.scenes[1];
     mainScene.events.emit(event, data);
   }
 }
