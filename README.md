@@ -8,7 +8,11 @@ You can play it here: https://souls.chat/s/opensouls/milton-is-trapped
 
 Milton is trapped in a room is an exploration of digital life inhabiting interactive environments.
 
-![](milton.png)
+<a href="https://x.com/dooartsy/status/1798787625534541853" target="_blank">
+  
+![](./thumbnail.png)
+
+</a>
 
 ## How to run
 
